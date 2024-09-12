@@ -4,32 +4,46 @@ import uuid
 from typing import TextIO
 
 
+# Символы, которые БУДУТ зашифрованы
 encrypt_characters = [
     'а', 'б', 'в', 'г', 'д', 'е', 'ё', 'ж', 'з', 'и',
     'й', 'к', 'л', 'м', 'н', 'о', 'п', 'р', 'с', 'т',
     'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь',
-    'э', 'ю', 'я'
+    'э', 'ю', 'я',
 ]
 
+# Допустимые символы, которые НЕ БУДУТ зашифрованы
 allowed_characters = [
-    " ", "\n", "-", "—", "?", "!", ",", ".", ":", "«", "»"
+    " ", "\n", "-", "—", "?", "!", ",", ".", ":", "«", "»",
 ]
 
 
-def square_size() -> int:
+def square_size(count: int = len(encrypt_characters)) -> int:
+    """
+    Рассчитывает минимальную сторону квадрата, способного вместить заданное количество букв
+
+    :param count: количество букв
+    :return: сторона квадрата
+    """
     for i in range(10):
-        if i * i >= len(encrypt_characters):
+        if i * i >= count:
             return i
-    raise Exception("Too many allowed characters, square can not be calculated")
+    raise Exception("Too many characters, square can not be calculated")
 
 
-def generate_square(key: str = "42") -> list[list[str | None]]:
+def generate_square(seed: str = "42") -> list[list[str | None]]:
+    """
+    Генерирует квадрат Полибия, заполняя его буквами в случайном порядке
+
+    :param seed: seed для использования Random
+    :return: случайно заполненный квадрат Полибия
+    """
     size = square_size()
     indexes = []
     for row in range(size):
         for col in range(size):
             indexes.append((row, col))
-    random.Random(key).shuffle(indexes)
+    random.Random(seed).shuffle(indexes)
     square = [[None] * size for _ in range(size)]
     for i, c in enumerate(encrypt_characters):
         index = indexes[i]
@@ -37,16 +51,29 @@ def generate_square(key: str = "42") -> list[list[str | None]]:
     return square
 
 
-def read_key_file(key_file: TextIO) -> str:
-    key_file.seek(0)
-    key = key_file.read()
-    if len(key) == 0:
-        key = uuid.uuid4().hex
-        key_file.write(key)
-    return key
+def read_seed_file(seed_file: TextIO) -> str:
+    """
+    Читает seed из файла (создает новый если файла нет или он пустой)
+
+    :param seed_file: файл, содержащий seed
+    :return: прочитанный seed (или сгенерированный, если файл пустой или отсутствует)
+    """
+    seed_file.seek(0)
+    seed = seed_file.read()
+    if len(seed) == 0:
+        seed = uuid.uuid4().hex
+        seed_file.write(seed)
+    return seed
 
 
 def encrypt(text: str, square: list[list[str | None]]) -> str:
+    """
+    Выполнение процесса шифрования с использованием квадрата Полибия
+
+    :param text: текст для шифрования
+    :param square: квадрат Полибия для шифрования
+    :return: зашифрованный текст
+    """
     coords = {}
     for row in range(len(square)):
         for col in range(len(square[0])):
@@ -67,6 +94,13 @@ def encrypt(text: str, square: list[list[str | None]]) -> str:
 
 
 def decrypt(text: str, square: list[list[str | None]]) -> str:
+    """
+    Выполнение процесса дешифрации с использованием квадрата Полибия
+
+    :param text: текст для дешифрации
+    :param square: квадрат Полибия для дешифрации
+    :return: дешифрованный текст
+    """
     decrypted = []
     i = 0
     while i < len(text):
@@ -87,14 +121,22 @@ def decrypt(text: str, square: list[list[str | None]]) -> str:
     return "".join(decrypted)
 
 
-def main(src: TextIO, dst: TextIO, mode: str, key_file: TextIO):
+def main(src: TextIO, dst: TextIO, mode: str, seed_file: TextIO) -> None:
+    """
+    Точка входа программы
+
+    :param src: файл с исходным текстом
+    :param dst: файл для записи результата программы
+    :param mode: профиль действия программы (шифрация или дешифрация)
+    :param seed_file: файл с seed для случайной генерации
+    """
     source_text = src.read()
     src.close()
 
-    key = read_key_file(key_file)
-    key_file.close()
+    seed = read_seed_file(seed_file)
+    seed_file.close()
 
-    square = generate_square(key)
+    square = generate_square(seed)
 
     if mode == "encrypt":
         result_text = encrypt(source_text, square)
@@ -108,6 +150,9 @@ def main(src: TextIO, dst: TextIO, mode: str, key_file: TextIO):
 
 
 if __name__ == "__main__":
+    """
+    Считывание параметров командной строки, их валидация и передача в main-метод
+    """
     parser = argparse.ArgumentParser(description="Encrypt or decrypt file with Polybius square algorythm.")
     parser.add_argument(
         "--mode",
@@ -142,13 +187,12 @@ if __name__ == "__main__":
         help="file for storing result",
     )
     parser.add_argument(
-        "--key-file",
-        "-k",
-        dest="key_file",
+        "--seed-file",
+        dest="seed_file",
         type=argparse.FileType("a+", encoding="utf-8"),
-        default="key.txt",
-        metavar="key_file",
-        help="file with key to be used in process",
+        default="seed.txt",
+        metavar="seed_file",
+        help="file with seed to be used with random",
     )
     ns = parser.parse_args()
-    main(ns.src, ns.dst, ns.mode, ns.key_file)
+    main(ns.src, ns.dst, ns.mode, ns.seed_file)
