@@ -162,6 +162,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--encrypt",
+        "-e",
         dest="mode",
         action="store_const",
         const="encrypt",
@@ -169,6 +170,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--decrypt",
+        "-d",
         dest="mode",
         action="store_const",
         const="decrypt",
@@ -188,6 +190,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--seed-file",
+        "-s",
         dest="seed_file",
         type=argparse.FileType("a+", encoding="utf-8"),
         default="seed.txt",
