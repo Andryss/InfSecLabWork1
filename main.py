@@ -1,5 +1,6 @@
 import argparse
 import random
+import uuid
 from typing import TextIO
 
 
@@ -36,15 +37,23 @@ def generate_square(key: str = "42") -> list[list[str | None]]:
     return square
 
 
-def encrypt(text: str) -> str:
-    text = text.lower()
-    square = generate_square()
+def read_key_file(key_file: TextIO) -> str:
+    key_file.seek(0)
+    key = key_file.read()
+    if len(key) == 0:
+        key = uuid.uuid4().hex
+        key_file.write(key)
+    return key
+
+
+def encrypt(text: str, square: list[list[str | None]]) -> str:
     coords = {}
     for row in range(len(square)):
         for col in range(len(square[0])):
             c = square[row][col]
             if c is not None:
                 coords[c] = (row, col)
+    text = text.lower()
     encrypted = []
     for c in text:
         if c in coords:
@@ -57,8 +66,7 @@ def encrypt(text: str) -> str:
     return "".join(encrypted)
 
 
-def decrypt(text: str) -> str:
-    square = generate_square()
+def decrypt(text: str, square: list[list[str | None]]) -> str:
     decrypted = []
     i = 0
     while i < len(text):
@@ -79,14 +87,19 @@ def decrypt(text: str) -> str:
     return "".join(decrypted)
 
 
-def main(src: TextIO, dst: TextIO, mode: str):
+def main(src: TextIO, dst: TextIO, mode: str, key_file: TextIO):
     source_text = src.read()
     src.close()
 
+    key = read_key_file(key_file)
+    key_file.close()
+
+    square = generate_square(key)
+
     if mode == "encrypt":
-        result_text = encrypt(source_text)
+        result_text = encrypt(source_text, square)
     elif mode == "decrypt":
-        result_text = decrypt(source_text)
+        result_text = decrypt(source_text, square)
     else:
         raise Exception(f"Unknown mode {mode}")
 
@@ -128,5 +141,14 @@ if __name__ == "__main__":
         metavar="output_file",
         help="file for storing result",
     )
+    parser.add_argument(
+        "--key-file",
+        "-k",
+        dest="key_file",
+        type=argparse.FileType("a+", encoding="utf-8"),
+        default="key.txt",
+        metavar="key_file",
+        help="file with key to be used in process",
+    )
     ns = parser.parse_args()
-    main(ns.src, ns.dst, ns.mode)
+    main(ns.src, ns.dst, ns.mode, ns.key_file)
