@@ -1,53 +1,41 @@
 import argparse
 import random
 import uuid
+from io import BufferedReader
 from typing import TextIO
 
 
-# Символы, которые БУДУТ зашифрованы
-encrypt_characters = [
-    'а', 'б', 'в', 'г', 'д', 'е', 'ё', 'ж', 'з', 'и',
-    'й', 'к', 'л', 'м', 'н', 'о', 'п', 'р', 'с', 'т',
-    'у', 'ф', 'х', 'ц', 'ч', 'ш', 'щ', 'ъ', 'ы', 'ь',
-    'э', 'ю', 'я',
-]
-
-# Допустимые символы, которые НЕ БУДУТ зашифрованы
-allowed_characters = [
-    " ", "\n", "-", "—", "?", "!", ",", ".", ":", "«", "»",
-]
-
-
-def square_size(count: int = len(encrypt_characters)) -> int:
+def square_size(count: int = 256) -> int:
     """
     Рассчитывает минимальную сторону квадрата, способного вместить заданное количество букв
 
-    :param count: количество букв
+    :param count: количество символов
     :return: сторона квадрата
     """
-    for i in range(10):
+    for i in range(20):
         if i * i >= count:
             return i
     raise Exception("Too many characters, square can not be calculated")
 
 
-def generate_square(seed: str = "42") -> list[list[str | None]]:
+def generate_square(seed: str = "42", count: int = 256) -> list[list[int | None]]:
     """
     Генерирует квадрат Полибия, заполняя его буквами в случайном порядке
 
     :param seed: seed для использования Random
+    :param count: количество буквами
     :return: случайно заполненный квадрат Полибия
     """
-    size = square_size()
+    size = square_size(count)
     indexes = []
     for row in range(size):
         for col in range(size):
             indexes.append((row, col))
     random.Random(seed).shuffle(indexes)
     square = [[None] * size for _ in range(size)]
-    for i, c in enumerate(encrypt_characters):
+    for i in range(count):
         index = indexes[i]
-        square[index[0]][index[1]] = c
+        square[index[0]][index[1]] = i
     return square
 
 
@@ -66,7 +54,23 @@ def read_seed_file(seed_file: TextIO) -> str:
     return seed
 
 
-def encrypt(text: str, square: list[list[str | None]]) -> str:
+def int_to_str(val: int, digits: int = 2) -> str:
+    """
+    Перевод числа в строку с добавлением ведущих нулей
+
+    :param val: число для перевода
+    :param digits: количество символов в итоговой строке
+    :return: число в виде строки
+    """
+    res = ""
+    while digits > 0:
+        res += str(val % 10)
+        val //= 10
+        digits -= 1
+    return res[::-1]
+
+
+def encrypt(text: bytes, square: list[list[int | None]]) -> str:
     """
     Выполнение процесса шифрования с использованием квадрата Полибия
 
@@ -80,20 +84,26 @@ def encrypt(text: str, square: list[list[str | None]]) -> str:
             c = square[row][col]
             if c is not None:
                 coords[c] = (row, col)
-    text = text.lower()
     encrypted = []
     for c in text:
-        if c in coords:
-            coord = coords[c]
-            encrypted.append(str(coord[0]) + str(coord[1]))
-        elif c in allowed_characters:
-            encrypted.append(c)
-        else:
+        if c not in coords:
             raise Exception(f"Unexpected character {c}")
+        coord = coords[c]
+        encrypted.append(int_to_str(coord[0]) + int_to_str(coord[1]))
     return "".join(encrypted)
 
 
-def decrypt(text: str, square: list[list[str | None]]) -> str:
+def bytes_to_str(val: bytes) -> str:
+    """
+    Перевод байт в строку с кодировкой Win-1251
+
+    :param val: массив байт
+    :return: строка
+    """
+    return val.decode('cp1251')
+
+
+def decrypt(text: bytes, square: list[list[int | None]]) -> str:
     """
     Выполнение процесса дешифрации с использованием квадрата Полибия
 
@@ -101,27 +111,26 @@ def decrypt(text: str, square: list[list[str | None]]) -> str:
     :param square: квадрат Полибия для дешифрации
     :return: дешифрованный текст
     """
+    if len(text) % 4 != 0:
+        raise Exception(f"Number of symbols must be divisible by 4")
     decrypted = []
     i = 0
     while i < len(text):
-        c = text[i]
-        if c.isdigit():
-            row = int(c)
-            col = int(text[i + 1])
-            c = square[row][col]
-            if c is None:
-                raise Exception(f"Square cell ({row}, {col}) contains empty value")
-            decrypted.append(c)
-            i += 1
-        elif c in allowed_characters:
-            decrypted.append(c)
-        else:
-            raise Exception(f"Unexpected character {c}")
-        i += 1
+        row = bytes_to_str(text[i:i+2])
+        col = bytes_to_str(text[i+2:i+4])
+        if not row[0].isdigit() or not row[1].isdigit() or not col[0].isdigit() or not col[1].isdigit():
+            raise Exception(f"Unexpected character {row} {col}")
+        row = int(row)
+        col = int(col)
+        c = square[row][col]
+        if c is None:
+            raise Exception(f"Square cell ({row}, {col}) contains empty value")
+        decrypted.append(bytes_to_str(c.to_bytes(1, 'big')))
+        i += 4
     return "".join(decrypted)
 
 
-def main(src: TextIO, dst: TextIO, mode: str, seed_file: TextIO) -> None:
+def main(src: BufferedReader, dst: TextIO, mode: str, seed_file: TextIO) -> None:
     """
     Точка входа программы
 
@@ -177,13 +186,13 @@ if __name__ == "__main__":
         help="manually set mode to decrypt",
     )
     parser.add_argument(
-        "src", type=argparse.FileType(encoding="utf-8"), metavar="source_file", help="source file"
+        "src", type=argparse.FileType("rb"), metavar="source_file", help="source file"
     )
     parser.add_argument(
         "--output",
         "-o",
         dest="dst",
-        type=argparse.FileType("w", encoding="utf-8"),
+        type=argparse.FileType("w", encoding="cp1251"),
         default="output.txt",
         metavar="output_file",
         help="file for storing result",
