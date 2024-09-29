@@ -1,39 +1,24 @@
 import argparse
 import random
 import uuid
-from io import BufferedReader
 from typing import TextIO
 
 
-def square_size(count: int = 256) -> int:
-    """
-    Рассчитывает минимальную сторону квадрата, способного вместить заданное количество букв
-
-    :param count: количество символов
-    :return: сторона квадрата
-    """
-    for i in range(20):
-        if i * i >= count:
-            return i
-    raise Exception("Too many characters, square can not be calculated")
-
-
-def generate_square(seed: str = "42", count: int = 256) -> list[list[int | None]]:
+def generate_square(seed: str = "42") -> list[list[int | None]]:
     """
     Генерирует квадрат Полибия, заполняя его буквами в случайном порядке
 
     :param seed: seed для использования Random
-    :param count: количество буквами
     :return: случайно заполненный квадрат Полибия
     """
-    size = square_size(count)
+    size = 16
     indexes = []
     for row in range(size):
         for col in range(size):
             indexes.append((row, col))
     random.Random(seed).shuffle(indexes)
     square = [[None] * size for _ in range(size)]
-    for i in range(count):
+    for i in range(size * size):
         index = indexes[i]
         square[index[0]][index[1]] = i
     return square
@@ -93,17 +78,7 @@ def encrypt(text: bytes, square: list[list[int | None]]) -> str:
     return "".join(encrypted)
 
 
-def bytes_to_str(val: bytes) -> str:
-    """
-    Перевод байт в строку с кодировкой Win-1251
-
-    :param val: массив байт
-    :return: строка
-    """
-    return val.decode('cp1251')
-
-
-def decrypt(text: bytes, square: list[list[int | None]]) -> str:
+def decrypt(text: str, square: list[list[int | None]]) -> bytes:
     """
     Выполнение процесса дешифрации с использованием квадрата Полибия
 
@@ -116,8 +91,8 @@ def decrypt(text: bytes, square: list[list[int | None]]) -> str:
     decrypted = []
     i = 0
     while i < len(text):
-        row = bytes_to_str(text[i:i+2])
-        col = bytes_to_str(text[i+2:i+4])
+        row = text[i:i+2]
+        col = text[i+2:i+4]
         if not row[0].isdigit() or not row[1].isdigit() or not col[0].isdigit() or not col[1].isdigit():
             raise Exception(f"Unexpected character {row} {col}")
         row = int(row)
@@ -125,12 +100,12 @@ def decrypt(text: bytes, square: list[list[int | None]]) -> str:
         c = square[row][col]
         if c is None:
             raise Exception(f"Square cell ({row}, {col}) contains empty value")
-        decrypted.append(bytes_to_str(c.to_bytes(1, 'big')))
+        decrypted.append(c.to_bytes(1, 'big'))
         i += 4
-    return "".join(decrypted)
+    return b"".join(decrypted)
 
 
-def main(src: BufferedReader, dst: TextIO, mode: str, seed_file: TextIO) -> None:
+def main(src: str, dst: str, mode: str, seed_file: TextIO) -> None:
     """
     Точка входа программы
 
@@ -139,23 +114,25 @@ def main(src: BufferedReader, dst: TextIO, mode: str, seed_file: TextIO) -> None
     :param mode: профиль действия программы (шифрация или дешифрация)
     :param seed_file: файл с seed для случайной генерации
     """
-    source_text = src.read()
-    src.close()
-
     seed = read_seed_file(seed_file)
     seed_file.close()
 
     square = generate_square(seed)
 
     if mode == "encrypt":
-        result_text = encrypt(source_text, square)
+        with open(src, "rb") as f:
+            src_bytes = f.read()
+        result_text = encrypt(src_bytes, square)
+        with open(dst, "w", encoding="utf-8") as f:
+            f.write(result_text)
     elif mode == "decrypt":
-        result_text = decrypt(source_text, square)
+        with open(src, "r", encoding="utf-8") as f:
+            src_text = f.read()
+        result_bytes = decrypt(src_text, square)
+        with open(dst, "wb") as f:
+            f.write(result_bytes)
     else:
         raise Exception(f"Unknown mode {mode}")
-
-    dst.write(result_text)
-    dst.close()
 
 
 if __name__ == "__main__":
@@ -186,13 +163,12 @@ if __name__ == "__main__":
         help="manually set mode to decrypt",
     )
     parser.add_argument(
-        "src", type=argparse.FileType("rb"), metavar="source_file", help="source file"
+        "src", metavar="source_file", help="source file"
     )
     parser.add_argument(
         "--output",
         "-o",
         dest="dst",
-        type=argparse.FileType("w", encoding="cp1251"),
         default="output.txt",
         metavar="output_file",
         help="file for storing result",
