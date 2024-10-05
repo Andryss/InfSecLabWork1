@@ -78,30 +78,41 @@ def encrypt(text: bytes, square: list[list[int | None]]) -> str:
     return "".join(encrypted)
 
 
-def decrypt(text: str, square: list[list[int | None]]) -> bytes:
+def str_to_int(text: str) -> int:
+    """
+    Перевод строки с ведущими нулями в число
+
+    :param text: строка для перевода
+    :return: число
+    """
+    for c in text:
+        if not c.isdigit():
+            raise Exception(f"Expect digit but found {c}")
+    return int(text)
+
+
+def decrypt(text: str, square: list[list[int | None]], digit_width: int = 2) -> bytes:
     """
     Выполнение процесса дешифрации с использованием квадрата Полибия
 
     :param text: текст для дешифрации
     :param square: квадрат Полибия для дешифрации
+    :param digit_width: длина числа в символах (с ведущими нулями)
     :return: дешифрованный текст
     """
-    if len(text) % 4 != 0:
-        raise Exception(f"Number of symbols must be divisible by 4")
+    if len(text) % (digit_width * 2) != 0:
+        raise Exception(f"Number of symbols must be divisible by {digit_width * 2}")
     decrypted = []
     i = 0
     while i < len(text):
-        row = text[i:i+2]
-        col = text[i+2:i+4]
-        if not row[0].isdigit() or not row[1].isdigit() or not col[0].isdigit() or not col[1].isdigit():
-            raise Exception(f"Unexpected character {row} {col}")
-        row = int(row)
-        col = int(col)
+        row = str_to_int(text[i:i+digit_width])
+        i += digit_width
+        col = str_to_int(text[i:i+digit_width])
+        i += digit_width
         c = square[row][col]
         if c is None:
             raise Exception(f"Square cell ({row}, {col}) contains empty value")
         decrypted.append(c.to_bytes(1, 'big'))
-        i += 4
     return b"".join(decrypted)
 
 
