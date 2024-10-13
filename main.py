@@ -1,5 +1,6 @@
 import argparse
 import random
+import sys
 import uuid
 from typing import TextIO
 
@@ -109,6 +110,8 @@ def decrypt(text: str, square: list[list[int | None]], digit_width: int = 2) -> 
         i += digit_width
         col = str_to_int(text[i:i+digit_width])
         i += digit_width
+        if row >= len(square) or col >= len(square[0]):
+            raise Exception(f"Cell ({row}, {col}) is out of square ({len(square)}, {len(square[0])})")
         c = square[row][col]
         if c is None:
             raise Exception(f"Square cell ({row}, {col}) contains empty value")
@@ -194,4 +197,7 @@ if __name__ == "__main__":
         help="file with seed to be used with random",
     )
     ns = parser.parse_args()
-    main(ns.src, ns.dst, ns.mode, ns.seed_file)
+    try:
+        main(ns.src, ns.dst, ns.mode, ns.seed_file)
+    except Exception as e:
+        print(e, file=sys.stderr)
